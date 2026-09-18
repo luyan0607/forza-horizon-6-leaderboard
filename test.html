@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Forza Horizon 排行榜測試</title>
+    <!-- 引入 Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 { color: #ff0055; text-shadow: 0 0 10px rgba(255,0,85,0.5); }
+        h2 { color: #00e5ff; border-left: 4px solid #00e5ff; padding-left: 10px; }
+        hr { border: 0; height: 1px; background: #333; margin: 25px 0; }
+        form {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        input, select, button {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #444;
+            background: #2a2a2a;
+            color: #fff;
+            margin-top: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            background: #ff0055;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 10px 20px;
+            margin-top: 15px;
+        }
+        button:hover { background: #ff3377; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: #1e1e1e;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th { background: #ff0055; color: white; padding: 12px; text-align: left; }
+        td { padding: 12px; border-bottom: 1px solid #333; }
+        tr:hover { background: #2a2a2a; }
+    </style>
+</head>
+<body>
+    <h1>🏎️ Forza Horizon 6 排行榜</h1>
+
+    <hr>
+
+    <!-- 輸入表單區 -->
+    <h2>上傳圈速成績</h2>
+    <form>
+        <label>玩家 ID：</label><br>
+        <input type="text" id="playerInput" placeholder="例如: SpeedDemon"><br><br>
+
+        <label>選擇賽道：</label><br>
+        <select id="trackInput">
+            <option value="Horizon 節慶賽道">Horizon 節慶賽道</option>
+            <option value="瓜納華托城市勁速賽">瓜納華托城市勁速賽</option>
+        </select><br><br>
+
+        <label>車廠品牌：</label><br>
+        <select id="brandInput">
+            <option value="">-- 請選擇車廠 --</option>
+            <option value="Ferrari">Ferrari</option>
+            <option value="Porsche">Porsche</option>
+            <option value="Lamborghini">Lamborghini</option>
+        </select><br><br>
+
+        <label>車型：</label><br>
+        <select id="carInput">
+            <option value="">-- 請先選擇車廠 --</option>
+        </select><br><br>
+
+        <label>PI 等級：</label><br>
+        <select id="piInput">
+            <option value="">-- 請選擇 PI 等級 --</option>
+            <option value="X">X Class</option>
+            <option value="S2">S2 Class</option>
+            <option value="S1">S1 Class</option>
+            <option value="A">A Class</option>
+            <option value="B">B Class</option>
+            <option value="C">C Class</option>
+            <option value="D">D Class</option>
+        </select><br><br>
+
+        <label>單圈時間：</label><br>
+        <input type="text" id="timeInput" placeholder="例如 01:15.320"><br><br>
+
+        <button type="button" id="submitBtn">送出成績</button>
+    </form>
+
+    <hr>
+
+    <!-- 排行榜表格區 -->
+    <h2>🏆 目前排行榜</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>名次</th>
+                <th>玩家 ID</th>
+                <th>賽道</th>
+                <th>車輛</th>
+                <th>PI 等級</th>
+                <th>單圈時間</th>
+            </tr>
+        </thead>
+        <tbody id="leaderboardBody">
+            <!-- 經由 Supabase 雲端資料動態渲染 -->
+        </tbody>
+    </table>
+
+    <script>
+        const carData = {
+            "Ferrari": ["488 Pista", "SF90 Stradale", "F40"],
+            "Porsche": ["911 GT3 RS", "Taycan Turbo S", "918 Spyder"],
+            "Lamborghini": ["Huracán Performante", "Aventador SVJ", "Sesto Elemento"]
+        };
+
+        const brandInput = document.getElementById('brandInput');
+        const carInput = document.getElementById('carInput');
+        const piInput = document.getElementById('piInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const playerInput = document.getElementById('playerInput');
+        const trackInput = document.getElementById('trackInput');
+        const timeInput = document.getElementById('timeInput');
+        const leaderboardBody = document.getElementById('leaderboardBody');
+
+        // Supabase 使用專案根網址，不要加上 /rest/v1/。
+        const SUPABASE_URL = 'https://ctamisbcdlxegxyjlwoa.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_AoitCPfWKjFByln-KHzxvA_BfraD2cu';
+        const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // 把 "01:15.320" 時間轉成純毫秒數字
+        function timeToMs(timeStr) {
+            const parts = timeStr.split(':');
+            const minutes = parseInt(parts[0], 10);
+            const secondsAndMs = parts[1].split('.');
+            const seconds = parseInt(secondsAndMs[0], 10);
+            const ms = parseInt(secondsAndMs[1], 10);
+            return (minutes * 60 * 1000) + (seconds * 1000) + ms;
+        }
+
+        // 從 Supabase 雲端抓取排行榜資料並顯示
+        async function fetchLeaderboard() {
+            leaderboardBody.innerHTML = '<tr><td colspan="6">資料載入中...</td></tr>';
+
+            if (!supabaseClient) {
+                leaderboardBody.innerHTML = '<tr><td colspan="6">Supabase SDK 載入失敗</td></tr>';
+                return;
+            }
+
+            const { data, error } = await supabaseClient
+                .from('leaderboard')
+                .select('*')
+                .order('total_ms', { ascending: true }); // 由快到慢排序
+
+            if (error) {
+                console.error('抓取資料失敗:', error);
+                leaderboardBody.innerHTML = '<tr><td colspan="6">無法載入排行榜資料</td></tr>';
+                return;
+            }
+
+            leaderboardBody.innerHTML = '';
+
+            data.forEach((item, index) => {
+                const newRow = document.createElement('tr');
+                newRow.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${item.player}</td>
+                    <td>${item.track}</td>
+                    <td>${item.car}</td>
+                    <td>${item.pi}</td>
+                    <td>${item.time}</td>
+                `;
+                leaderboardBody.appendChild(newRow);
+            });
+        }
+
+        // 車廠選單連動
+        brandInput.addEventListener('change', function() {
+            const selectedBrand = this.value;
+            carInput.innerHTML = '<option value="">-- 請選擇車型 --</option>';
+            if (selectedBrand && carData[selectedBrand]) {
+                carData[selectedBrand].forEach(function(car) {
+                    const option = document.createElement('option');
+                    option.value = car;
+                    option.textContent = car;
+                    carInput.appendChild(option);
+                });
+            }
+        });
+
+        // 送出成績至 Supabase 雲端
+        submitBtn.addEventListener('click', async function() {
+            const player = playerInput.value;
+            const track = trackInput.value;
+            const brand = brandInput.value;
+            const car = carInput.value;
+            const pi = piInput.value;
+            const time = timeInput.value;
+
+            const timeFormat = /^\d{2}:\d{2}\.\d{3}$/;
+
+            if (player === '' || time === '' || brand === '' || car === '' || pi === '') {
+                alert('請完整填寫所有欄位！');
+                return;
+            }
+
+            if (!timeFormat.test(time)) {
+                alert('單圈時間格式不正確！\n請輸入格式如：01:15.320');
+                return;
+            }
+
+            // 寫入雲端資料庫
+            if (!supabaseClient) {
+                alert('Supabase SDK 載入失敗，暫時無法上傳成績。');
+                return;
+            }
+
+            const { error } = await supabaseClient
+                .from('leaderboard')
+                .insert([
+                    {
+                        player: player,
+                        track: track,
+                        car: `${brand} ${car}`,
+                        pi: pi,
+                        time: time,
+                        total_ms: timeToMs(time)
+                    }
+                ]);
+
+            if (error) {
+                alert('寫入資料庫失敗：' + error.message);
+                console.error(error);
+            } else {
+                alert('成績上傳成功！');
+                playerInput.value = '';
+                timeInput.value = '';
+                brandInput.value = '';
+                piInput.value = '';
+                carInput.innerHTML = '<option value="">-- 請先選擇車廠 --</option>';
+                // 重新刷新排行榜表格
+                fetchLeaderboard();
+            }
+        });
+
+        // 頁面初次載入時抓取資料
+        fetchLeaderboard();
+    </script>
+</body>
+</html>
